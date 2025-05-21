@@ -1,62 +1,48 @@
+# main.py
+
 import os
+import json
 import base64
+import smtplib
 from email.mime.text import MIMEText
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
-import openai
 
+# Gmail API 접근에 필요한 범위
 SCOPES = ['https://www.googleapis.com/auth/gmail.send']
 
-openai.api_key = os.getenv('OPENAI_API_KEY')
-
-def create_message(sender, to, subject, message_text):
-    message = MIMEText(message_text)
-    message['to'] = to
-    message['from'] = sender
-    message['subject'] = subject
-    raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
-    return {'raw': raw}
-
-def send_message(service, user_id, message):
-    message = service.users().messages().send(userId=user_id, body=message).execute()
-    print(f'Message Id: {message["id"]}')
-    return message
-
-def get_gmail_service():
+def gmail_login():
     creds = None
-    if os.path.exists('token.json'):
-        creds = Credentials.from_authorized_user_file('token.json', SCOPES)
-    if not creds or not creds.valid:
-        flow = InstalledAppFlow.from_client_secrets_file('credentials.json', SCOPES)
-        creds = flow.run_local_server(port=0)
-        with open('token.json', 'w') as token:
-            token.write(creds.to_json())
+
+    # GitHub Secret에서 credentials.json 내용 읽기
+    credentials_raw = os.getenv("GMAIL_CREDENTIALS")
+    credentials_dict = json.loads(credentials_raw)
+
+    # 파일로 저장
+    with open('credentials.json', 'w') as f:
+        json.dump(credentials_dict, f)
+
+    # 인증 플로우 실행
+    flow = InstalledAppFlow.from_client_secrets_file('credentials.json', SCOPES)
+    creds = flow.run_local_server(port=0)
+
+    # Gmail 서비스 객체 생성
     service = build('gmail', 'v1', credentials=creds)
     return service
 
-def generate_economic_summary():
-    prompt = """
-    전 세계 주요 경제 이슈 3~5가지를 초보자도 이해할 수 있게 중학생 수준으로 설명하고, 
-    각 이슈가 주식, 채권, 암호화폐 시장에 미치는 영향과 
-    오늘 시장에 미칠 종합적 영향 방향을 알려주세요. 핵심 키워드도 1~2개 제시해 주세요.
-    """
-    response = openai.ChatCompletion.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=600,
-        temperature=0.7,
-    )
-    return response.choices[0].message['content']
+def send_test_email(service):
+    message = MIMEText('✅ GPT 자동 메일 테스트입니다. 잘 도착했다면 설정이 성공한 것입니다!')
+    message['to'] = '<wnsdud000601@icloud.com>'  # ← 본인 이메일로 변경
+    message['from'] = 'me'
+    message['subject'] = '테스트 메일: GPT 자동화'
 
-def main():
-    service = get_gmail_service()
-    sender = '본인 Gmail 주소@gmail.com'
-    to = sender
-    subject = '[경제 요약] 전날 주요 이슈와 시장 전망'
-    summary = generate_economic_summary()
-    message = create_message(sender, to, subject, summary)
-    send_message(service, 'me', message)
+    raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode()
+    body = {'raw': raw_message}
+
+    message = service.users().messages().send(userId='me', body=body).execute()
+    print('✅ 메일 전송 성공! Message ID:', message['id'])
 
 if __name__ == '__main__':
-    main()
+    gmail_service = gmail_login()
+    send_test_email(gmail_service)
