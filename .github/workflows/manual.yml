@@ -6,6 +6,8 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      GMAIL_CREDENTIALS: ${{ secrets.GMAIL_CREDENTIALS }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
